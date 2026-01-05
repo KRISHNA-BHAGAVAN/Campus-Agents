@@ -1,0 +1,12 @@
+langchain
+langgraph
+langchain-core
+langchain-groq
+langchain-google-genai
+tavily-python
+langchain-community
+duckduckgo-search
+langchain-tavily
+python-dotenv
+pydantic
+typing-extensions
