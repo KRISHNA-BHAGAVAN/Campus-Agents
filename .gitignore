@@ -1,6 +1,16 @@
-__pycache__
-*.json
-test*.py
-venv
-.agent
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
 .env
+
+# Node
+node_modules/
+dist/
+build/
+.DS_Store
+
+# Agent
+.agent/
+.gemini/
