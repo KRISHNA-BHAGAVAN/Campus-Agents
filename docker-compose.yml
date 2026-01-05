@@ -1,6 +1,8 @@
 services:
   app:
     build: .
+    image: campusflow:v1.0
+    container_name: campusflow
     ports:
       - "8000:8000"
     env_file:
