@@ -243,7 +243,7 @@ def decide_rounds_node(state: PlacementState) -> PlacementState:
         but fill gaps with web research patterns.
         """
         
-    total_context_len = len(state["job_description"]) + len(state.get("web_research_results", ""))
+    total_context_len = len(state["job_description"]) + len(state.get("web_research_results") or "")
     
     # Use router
     llm = get_llm_for_task("reasoning", total_context_len)
