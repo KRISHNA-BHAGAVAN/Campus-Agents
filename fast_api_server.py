@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 
 # Import the agent graph
 # Import the agent graph
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from placement_cell_agent.graph import graph
 from placement_cell_agent.models import InterviewRound, MockTest, Question
 from db import save_generation_to_db, get_generation_history
@@ -115,6 +117,13 @@ async def get_history():
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+# Serve Frontend Static Files (Production/Docker)
+# Check for common locations of the build output
+frontend_dist = "dist" if os.path.exists("dist") else "frontend/dist"
+
+if os.path.exists(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
 
 if __name__ == "__main__":
     uvicorn.run("fast_api_server:app", host="0.0.0.0", port=8000, reload=True)

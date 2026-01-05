@@ -4,8 +4,9 @@ import JDInput from "./components/JDInput";
 import ResultsView from "./components/ResultsView";
 import HistorySidebar from "./components/HistorySidebar";
 
-// API Base URL - update if deployed
-const API_URL = "http://localhost:8000";
+// API Base URL - Environment variable or default to relative path (for production)
+// In development, Vite proxy or CORS handles localhost:8000
+const API_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 function App() {
   const [loading, setLoading] = useState(false);
