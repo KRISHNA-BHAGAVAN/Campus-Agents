@@ -10,3 +10,6 @@ langchain-tavily
 python-dotenv
 pydantic
 typing-extensions
+fastapi
+uvicorn
+pymongo

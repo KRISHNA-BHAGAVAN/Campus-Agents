@@ -12,6 +12,7 @@ import {
   FileText,
   Clock,
   ListTodo,
+  Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -33,8 +34,8 @@ const QuestionResult = ({ questions, roundType }) => {
                 q.difficulty === "easy"
                   ? "bg-green-500/20 text-green-400"
                   : q.difficulty === "medium"
-                  ? "bg-yellow-500/20 text-yellow-400"
-                  : "bg-red-500/20 text-red-400"
+                    ? "bg-yellow-500/20 text-yellow-400"
+                    : "bg-red-500/20 text-red-400"
               )}
             >
               {q.difficulty?.toUpperCase()}
@@ -154,8 +155,8 @@ const TestCard = ({ test, index }) => {
               test.round_type === "coding"
                 ? "bg-purple-500/10 border-purple-500/20 text-purple-400"
                 : test.round_type === "aptitude_mcq"
-                ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
-                : "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                  ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
+                  : "bg-blue-500/10 border-blue-500/20 text-blue-400"
             )}
           >
             {test.round_type === "coding" ? (
@@ -264,8 +265,8 @@ const ResultsView = ({ result, onBack }) => {
                     result.research_confidence > 0.7
                       ? "text-green-500"
                       : result.research_confidence > 0.4
-                      ? "text-yellow-500"
-                      : "text-red-500"
+                        ? "text-yellow-500"
+                        : "text-red-500"
                   )}
                 >
                   {Math.round(result.research_confidence * 100)}%

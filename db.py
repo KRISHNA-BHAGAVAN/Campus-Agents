@@ -1,5 +1,5 @@
 import os
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -17,7 +17,7 @@ def get_database():
     if client is None:
         try:
             print(f"Connecting to MongoDB at {MONGODB_URI}")
-            client = AsyncIOMotorClient(MONGODB_URI)
+            client = AsyncMongoClient(MONGODB_URI)
             db = client[DB_NAME]
             print("Connected to MongoDB successfully.")
         except Exception as e:

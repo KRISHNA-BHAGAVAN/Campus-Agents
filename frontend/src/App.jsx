@@ -6,7 +6,7 @@ import HistorySidebar from "./components/HistorySidebar";
 
 // API Base URL - Environment variable or default to relative path (for production)
 // In development, Vite proxy or CORS handles localhost:8000
-const API_URL = import.meta.env.VITE_API_BASE_URL || "";
+const API_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 function App() {
   const [loading, setLoading] = useState(false);
@@ -45,7 +45,7 @@ function App() {
       console.error(err);
       setError(
         err.response?.data?.detail ||
-          "Failed to generate interview plan. Please check the backend connection."
+        "Failed to generate interview plan. Please check the backend connection."
       );
     } finally {
       setLoading(false);
@@ -67,9 +67,8 @@ function App() {
       />
 
       <div
-        className={`container mx-auto px-4 py-8 flex-grow max-w-5xl transition-all duration-300 ${
-          isSidebarOpen ? "md:pl-80" : ""
-        }`}
+        className={`container mx-auto px-4 py-8 flex-grow max-w-5xl transition-all duration-300 ${isSidebarOpen ? "md:pl-80" : ""
+          }`}
       >
         <header className="flex items-center gap-3 mb-12">
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-primary-foreground font-bold text-sm">
@@ -96,9 +95,8 @@ function App() {
       </div>
 
       <footer
-        className={`py-6 text-center text-xs text-muted-foreground border-t border-border mt-12 transition-all duration-300 ${
-          isSidebarOpen ? "md:pl-80" : ""
-        }`}
+        className={`py-6 text-center text-xs text-muted-foreground border-t border-border mt-12 transition-all duration-300 ${isSidebarOpen ? "md:pl-80" : ""
+          }`}
       >
         Powered by LangGraph & Gemini
       </footer>

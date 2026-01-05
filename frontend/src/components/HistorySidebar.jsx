@@ -37,7 +37,7 @@ const HistorySidebar = ({ history, onSelect, isOpen, toggleOpen }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {history.length === 0 ? (
+          {!Array.isArray(history) || history.length === 0 ? (
             <div className="text-center text-muted-foreground py-10 text-sm">
               No history found. <br /> Generate a plan first!
             </div>
@@ -57,11 +57,10 @@ const HistorySidebar = ({ history, onSelect, isOpen, toggleOpen }) => {
                   </h4>
                   {item.research_confidence > 0 && (
                     <div
-                      className={`w-2 h-2 rounded-full ${
-                        item.research_confidence > 0.7
+                      className={`w-2 h-2 rounded-full ${item.research_confidence > 0.7
                           ? "bg-green-500"
                           : "bg-yellow-500"
-                      }`}
+                        }`}
                     ></div>
                   )}
                 </div>
