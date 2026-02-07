@@ -9,7 +9,16 @@ duckduckgo-search
 langchain-tavily
 python-dotenv
 pydantic
+email-validator
 typing-extensions
 fastapi
 uvicorn
 pymongo
+passlib[bcrypt]
+bcrypt==4.0.1
+python-jose[cryptography]
+python-multipart
+emails
+pandas
+openpyxl
+motor

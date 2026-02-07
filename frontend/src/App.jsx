@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from "./context/ToastContext";
+import LoginPage from './pages/LoginPage';
+import WorkspaceSelector from './components/WorkspaceSelector';
+import WorkspaceManager from './components/WorkspaceManager';
 import JDInput from "./components/JDInput";
 import ResultsView from "./components/ResultsView";
 import HistorySidebar from "./components/HistorySidebar";
+import ExamAgentView from "./components/ExamAgentView";
+import { Briefcase, Calendar, Settings, LogOut, Layers, Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
 
-// API Base URL - Environment variable or default to relative path (for production)
-// In development, Vite proxy or CORS handles localhost:8000
+// API config
 const API_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-function App() {
+const AuthenticatedApp = () => {
+  const { user, workspace, selectWorkspace, logout } = useAuth();
+  const [currentView, setCurrentView] = useState('placement'); // 'placement' | 'exam' | 'manage'
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -19,8 +28,8 @@ function App() {
 
   // Fetch History on Mount
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    if (workspace) fetchHistory();
+  }, [workspace]);
 
   const fetchHistory = async () => {
     try {
@@ -39,14 +48,10 @@ function App() {
         job_description: jdText,
       });
       setResult(response.data);
-      // Refresh history after new generation
       fetchHistory();
     } catch (err) {
       console.error(err);
-      setError(
-        err.response?.data?.detail ||
-        "Failed to generate interview plan. Please check the backend connection."
-      );
+      setError(err.response?.data?.detail || "Failed to generate interview plan.");
     } finally {
       setLoading(false);
     }
@@ -55,7 +60,10 @@ function App() {
   const handleSelectHistory = (item) => {
     setResult(item);
     setError(null);
+    setCurrentView('placement');
   };
+
+  if (!workspace) return <WorkspaceSelector />;
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
@@ -66,41 +74,101 @@ function App() {
         toggleOpen={setIsSidebarOpen}
       />
 
-      <div
-        className={`container mx-auto px-4 py-8 flex-grow max-w-5xl transition-all duration-300 ${isSidebarOpen ? "md:pl-80" : ""
-          }`}
-      >
-        <header className="flex items-center gap-3 mb-12">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-            A
+      <div className={`container mx-auto px-4 py-8 flex-grow max-w-7xl transition-all duration-300 ${isSidebarOpen ? "md:pl-80" : ""}`}>
+        <header className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
+          <div className="flex items-center gap-4">
+            <motion.div 
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="p-3 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-xl"
+            >
+              <Layers className="w-6 h-6 text-indigo-400" />
+            </motion.div>
+            <div className="flex flex-col">
+              <span className="font-display font-bold text-2xl tracking-tight text-white">Campus Agents</span>
+              <span className="text-xs text-white/40 font-mono">{workspace.name}</span>
+            </div>
           </div>
-          <span className="font-semibold text-lg tracking-tight text-muted-foreground">
-            Campus Agent
-          </span>
+
+          {/* Navigation */}
+          <div className="flex glass-card p-1.5 rounded-xl border border-white/10 backdrop-blur-sm">
+            <button
+              onClick={() => setCurrentView('placement')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${currentView === 'placement' ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              <Briefcase className="w-4 h-4" />
+              Placement
+            </button>
+            <button
+              onClick={() => setCurrentView('exam')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${currentView === 'exam' ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              <Calendar className="w-4 h-4" />
+              Exam
+            </button>
+            <button
+              onClick={() => setCurrentView('manage')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${currentView === 'manage' ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              <Layers className="w-4 h-4" />
+              Manage
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button onClick={() => selectWorkspace(null)} className="p-2.5 glass-card rounded-lg text-white/60 hover:text-white hover:border-indigo-500/50 transition-all" title="Switch Workspace">
+              <Settings className="w-5 h-5" />
+            </button>
+            <button onClick={logout} className="p-2.5 glass-card rounded-lg text-white/60 hover:text-red-400 hover:border-red-500/50 transition-all" title="Logout">
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </header>
 
         <main className="w-full">
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg mb-6 text-sm flex items-center gap-2">
-              <span className="font-bold">Error:</span> {error}
-            </div>
+          {currentView === 'placement' && (
+            <>
+              {error && (
+                <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg mb-6 text-sm flex items-center gap-2">
+                  <span className="font-bold">Error:</span> {error}
+                </div>
+              )}
+              {!result ? (
+                <JDInput onSubmit={handleJDSubmit} loading={loading} />
+              ) : (
+                <ResultsView result={result} onBack={() => setResult(null)} />
+              )}
+            </>
           )}
-
-          {!result ? (
-            <JDInput onSubmit={handleJDSubmit} loading={loading} />
-          ) : (
-            <ResultsView result={result} onBack={() => setResult(null)} />
-          )}
+          {currentView === 'exam' && <ExamAgentView />}
+          {currentView === 'manage' && <WorkspaceManager />}
         </main>
       </div>
 
-      <footer
-        className={`py-6 text-center text-xs text-muted-foreground border-t border-border mt-12 transition-all duration-300 ${isSidebarOpen ? "md:pl-80" : ""
-          }`}
-      >
-        Powered by LangGraph & Gemini
+      <footer className={`py-6 text-center text-xs text-white/30 border-t border-white/10 mt-12 transition-all duration-300 ${isSidebarOpen ? "md:pl-80" : ""}`}>
+        <div className="flex items-center justify-center gap-2">
+          <Sparkles className="w-3 h-3" />
+          <span>Powered by LangGraph & Gemini</span>
+        </div>
       </footer>
     </div>
+  );
+};
+
+const AppContent = () => {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-background text-white">Loading...</div>;
+  if (!user) return <LoginPage />;
+  return <AuthenticatedApp />;
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </AuthProvider>
   );
 }
 
