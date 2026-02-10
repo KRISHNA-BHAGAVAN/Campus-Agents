@@ -1,40 +1,57 @@
 # Stage 1: Build the React Frontend
 FROM node:18-alpine AS frontend-builder
+
 WORKDIR /app/frontend
 
-# Copy frontend source code
+# Leverage Docker layer caching for node_modules
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm ci --quiet
 
-COPY frontend ./
-# Build the frontend - outputs to /app/frontend/dist
+# Copy frontend source and build
+COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Setup Python Backend
+# Stage 2: Final Production Image
 FROM python:3.10-slim
+
+# Set environment variables for Python performance and reliability
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user for better security
+RUN useradd -m -s /bin/bash appuser
 
 WORKDIR /app
 
-# Install system dependencies (if any)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install python dependencies
+# Install Python dependencies separately to optimize cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
+# Copy backend source code
 COPY . .
 
-# Copy built frontend assets from Stage 1 to the backend's expected static location
+# Copy built frontend artifacts from Stage 1
 COPY --from=frontend-builder /app/frontend/dist ./dist
 
-# Expose port
+# Ensure appuser has ownership of the application directory
+RUN chown -R appuser:appuser /app
+
+# Switch to the non-root user
+USER appuser
+
+# Expose the API and Frontend port
 EXPOSE 8000
 
-# Environment variables (Defaults, override in docker-compose or run command)
-ENV PYTHONUNBUFFERED=1
+# Health check to ensure the service is running
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Command to run the application
+# Start the application
 CMD ["uvicorn", "fast_api_server:app", "--host", "0.0.0.0", "--port", "8000"]
