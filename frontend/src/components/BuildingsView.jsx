@@ -7,6 +7,8 @@ import RoomView from './RoomView';
 
 const API_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
+const SEATING_MULTIPLIER = { Single: 1, Two: 2, Three: 3 };
+
 // Placeholder gradients for "Fantasy Illustrations"
 const cardGradients = [
     "from-purple-900 to-indigo-900",
@@ -243,7 +245,7 @@ const BuildingsView = ({ onNavigate }) => {
     );
 };
 
-// Sub-view: Floors & Rooms in a Building (floors = simple integer count)
+// ─── Sub-view: Floors & Rooms in a Building ───
 
 const RoomSelectionView = ({ building, onBack }) => {
     const { workspace } = useAuth();
@@ -251,10 +253,10 @@ const RoomSelectionView = ({ building, onBack }) => {
     const [selectedRoom, setSelectedRoom] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const [newRoom, setNewRoom] = useState({ id: "", name: "", capacity: 60, rows: 10, columns: 6, seating_type: "Single", _forFloor: null });
+    const [newRoom, setNewRoom] = useState({ id: "", name: "", rows: 10, columns: 6, seating_type: "Single", _forFloor: null });
     const [creatingRoom, setCreatingRoom] = useState(false);
-    const [editingRoomId, setEditingRoomId] = useState(null);
-    const [editRoomData, setEditRoomData] = useState({ id: "", name: "", capacity: 60, rows: 10, columns: 6, seating_type: "Single" });
+    const [editingRoomId, setEditingRoomId] = useState(null);  // This is the MongoDB _id
+    const [editRoomData, setEditRoomData] = useState({ id: "", name: "", rows: 10, columns: 6, seating_type: "Single" });
 
     const [floorCount, setFloorCount] = useState(building.floors || 0);
     const [expandedFloors, setExpandedFloors] = useState({});
@@ -278,13 +280,22 @@ const RoomSelectionView = ({ building, onBack }) => {
 
     const toggleFloor = (floorNum) => setExpandedFloors(prev => ({ ...prev, [floorNum]: !prev[floorNum] }));
 
+    // Helper: compute capacity from form state
+    const calcCapacity = (r) => {
+        const mult = SEATING_MULTIPLIER[r.seating_type] || 1;
+        return (r.rows || 0) * (r.columns || 0) * mult;
+    };
+
     // Add Floor = increment count by 1
     const handleAddFloor = async () => {
         setAddingFloor(true);
         const newCount = floorCount + 1;
         try {
             await axios.put(`${API_URL}/workspaces/${workspace.id}/buildings/${building.id}`, {
-                ...building, floors: newCount
+                id: building.id,
+                name: building.name,
+                workspace_id: building.workspace_id || workspace.id,
+                floors: newCount
             });
             setFloorCount(newCount);
             setExpandedFloors(prev => ({ ...prev, [newCount]: true }));
@@ -303,65 +314,85 @@ const RoomSelectionView = ({ building, onBack }) => {
         try {
             const newCount = floorCount - 1;
             await axios.put(`${API_URL}/workspaces/${workspace.id}/buildings/${building.id}`, {
-                ...building, floors: newCount
+                id: building.id,
+                name: building.name,
+                workspace_id: building.workspace_id || workspace.id,
+                floors: newCount
             });
             setFloorCount(newCount);
             setExpandedFloors(prev => { const n = { ...prev }; delete n[floorNum]; return n; });
         } catch (err) { alert("Failed to delete floor"); }
     };
 
-    // Room CRUD
+    // Room CRUD — uses _id (MongoDB ObjectId) for delete and update to avoid ambiguity
     const handleCreateRoom = async (e, floorNum) => {
         e.preventDefault();
         const roomId = newRoom._forFloor === floorNum ? newRoom.id : "";
         if (!roomId) return;
+        // Check uniqueness across building
         if (rooms.find(r => r.id === roomId)) {
             alert("Room ID must be unique across the building. This room ID already exists.");
             return;
         }
+        const rows = newRoom._forFloor === floorNum ? newRoom.rows : 10;
+        const columns = newRoom._forFloor === floorNum ? newRoom.columns : 6;
+        const seatingType = newRoom._forFloor === floorNum ? newRoom.seating_type : "Single";
+        const capacity = rows * columns * (SEATING_MULTIPLIER[seatingType] || 1);
+
         setCreatingRoom(true);
         try {
             await axios.post(`${API_URL}/workspaces/${workspace.id}/rooms`, {
                 id: roomId,
                 name: (newRoom._forFloor === floorNum ? newRoom.name : "") || "classroom",
-                capacity: newRoom._forFloor === floorNum ? newRoom.capacity : 60,
-                rows: newRoom._forFloor === floorNum ? newRoom.rows : 10,
-                columns: newRoom._forFloor === floorNum ? newRoom.columns : 6,
-                seating_type: newRoom._forFloor === floorNum ? newRoom.seating_type : "Single",
+                capacity,
+                rows,
+                columns,
+                seating_type: seatingType,
                 building_id: building.id,
                 floor_id: floorNum,
                 workspace_id: workspace.id
             });
-            setNewRoom({ id: "", name: "", capacity: 60, rows: 10, columns: 6, seating_type: "Single", _forFloor: null });
+            setNewRoom({ id: "", name: "", rows: 10, columns: 6, seating_type: "Single", _forFloor: null });
             fetchRooms();
-        } catch (err) { alert("Failed to create room"); }
+        } catch (err) { alert("Failed to create room"); console.error(err); }
         finally { setCreatingRoom(false); }
     };
 
-    const handleDeleteRoom = async (e, id) => {
+    const handleDeleteRoom = async (e, mongoId) => {
         e.stopPropagation();
         if (!window.confirm("Delete this room?")) return;
         try {
-            await axios.delete(`${API_URL}/workspaces/${workspace.id}/rooms/${id}`);
+            await axios.delete(`${API_URL}/workspaces/${workspace.id}/rooms/${mongoId}`);
             fetchRooms();
-        } catch (err) { alert("Delete failed"); }
+        } catch (err) { alert("Delete failed"); console.error(err); }
     };
 
     const startEditRoom = (e, r) => {
         e.stopPropagation();
-        setEditingRoomId(r.id);
-        setEditRoomData({ id: r.id, name: r.name, capacity: r.capacity, rows: r.rows || 10, columns: r.columns || 6, seating_type: r.seating_type || "Single" });
+        setEditingRoomId(r._id);  // Use MongoDB _id
+        setEditRoomData({
+            id: r.id,
+            name: r.name,
+            rows: r.rows || 10,
+            columns: r.columns || 6,
+            seating_type: r.seating_type || "Single"
+        });
     };
 
     const submitEditRoom = async (e) => {
         e.preventDefault();
         try {
-            const exists = rooms.find(r => r.id === editRoomData.id && editingRoomId !== r.id);
-            if (exists) { alert("Room ID already exists"); return; }
-            await axios.put(`${API_URL}/workspaces/${workspace.id}/rooms/${editingRoomId}`, editRoomData);
+            // Check uniqueness: different _id but same room id
+            const exists = rooms.find(r => r.id === editRoomData.id && r._id !== editingRoomId);
+            if (exists) { alert("Room ID already exists in this building"); return; }
+            const capacity = calcCapacity(editRoomData);
+            await axios.put(`${API_URL}/workspaces/${workspace.id}/rooms/${editingRoomId}`, {
+                ...editRoomData,
+                capacity
+            });
             setEditingRoomId(null);
             fetchRooms();
-        } catch (err) { alert("Failed to update room"); }
+        } catch (err) { alert("Failed to update room"); console.error(err); }
     };
 
     if (selectedRoom) {
@@ -370,6 +401,9 @@ const RoomSelectionView = ({ building, onBack }) => {
 
     // Generate floor numbers array: [1, 2, 3, ..., floorCount]
     const floorNumbers = Array.from({ length: floorCount }, (_, i) => i + 1);
+
+    // Preview capacity for the new room form
+    const newRoomCapacity = calcCapacity(newRoom);
 
     return (
         <div className="animate-in fade-in slide-in-from-right-8 duration-500">
@@ -430,7 +464,7 @@ const RoomSelectionView = ({ building, onBack }) => {
                                 {/* Floor Content (rooms) */}
                                 {isExpanded && (
                                     <div className="p-4 border-t border-white/5 space-y-4">
-                                        {/* Add Room Form */}
+                                        {/* Add Room Form — capacity is auto-calculated */}
                                         <form onSubmit={(e) => handleCreateRoom(e, floorNum)} className="flex gap-2 items-end flex-wrap bg-black/20 p-3 rounded-lg border border-white/5">
                                             <div className="flex flex-col">
                                                 <label className="text-[10px] text-gray-500 mb-0.5">Room ID</label>
@@ -450,15 +484,17 @@ const RoomSelectionView = ({ building, onBack }) => {
                                             </div>
                                             <div className="flex flex-col">
                                                 <label className="text-[10px] text-gray-500 mb-0.5">Rows</label>
-                                                <input type="number" className="bg-black/40 border border-white/10 rounded p-1.5 text-white text-xs w-14" value={newRoom._forFloor === floorNum ? newRoom.rows : 10} onChange={e => setNewRoom({ ...newRoom, _forFloor: floorNum, rows: Number(e.target.value) })} required />
+                                                <input type="number" min="1" className="bg-black/40 border border-white/10 rounded p-1.5 text-white text-xs w-14" value={newRoom._forFloor === floorNum ? newRoom.rows : 10} onChange={e => setNewRoom({ ...newRoom, _forFloor: floorNum, rows: Number(e.target.value) })} required />
                                             </div>
                                             <div className="flex flex-col">
                                                 <label className="text-[10px] text-gray-500 mb-0.5">Cols</label>
-                                                <input type="number" className="bg-black/40 border border-white/10 rounded p-1.5 text-white text-xs w-14" value={newRoom._forFloor === floorNum ? newRoom.columns : 6} onChange={e => setNewRoom({ ...newRoom, _forFloor: floorNum, columns: Number(e.target.value) })} required />
+                                                <input type="number" min="1" className="bg-black/40 border border-white/10 rounded p-1.5 text-white text-xs w-14" value={newRoom._forFloor === floorNum ? newRoom.columns : 6} onChange={e => setNewRoom({ ...newRoom, _forFloor: floorNum, columns: Number(e.target.value) })} required />
                                             </div>
                                             <div className="flex flex-col">
                                                 <label className="text-[10px] text-gray-500 mb-0.5">Capacity</label>
-                                                <input type="number" className="bg-black/40 border border-white/10 rounded p-1.5 text-white text-xs w-16" value={newRoom._forFloor === floorNum ? newRoom.capacity : 60} onChange={e => setNewRoom({ ...newRoom, _forFloor: floorNum, capacity: Number(e.target.value) })} required />
+                                                <div className="bg-black/60 border border-white/10 rounded p-1.5 text-purple-300 text-xs w-16 text-center font-mono font-semibold">
+                                                    {newRoom._forFloor === floorNum ? calcCapacity(newRoom) : "—"}
+                                                </div>
                                             </div>
                                             <button disabled={creatingRoom} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-medium self-end">{creatingRoom ? "..." : "Add Room"}</button>
                                         </form>
@@ -466,12 +502,12 @@ const RoomSelectionView = ({ building, onBack }) => {
                                         {/* Room Cards */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                             {floorRooms.map(r => (
-                                                <div key={r.id} onClick={() => { if (!editingRoomId) setSelectedRoom(r); }} className="bg-gray-800/50 hover:bg-purple-900/20 border border-white/10 hover:border-purple-500/30 p-4 rounded-xl cursor-pointer group relative transition-all">
+                                                <div key={r._id} onClick={() => { if (!editingRoomId) setSelectedRoom(r); }} className="bg-gray-800/50 hover:bg-purple-900/20 border border-white/10 hover:border-purple-500/30 p-4 rounded-xl cursor-pointer group relative transition-all">
                                                     <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <button onClick={(e) => startEditRoom(e, r)} className="p-1 rounded bg-black/50 text-white/50 hover:bg-indigo-600 hover:text-white transition-colors"><Edit2 className="w-3 h-3" /></button>
-                                                        <button onClick={(e) => handleDeleteRoom(e, r.id)} className="p-1 rounded bg-black/50 text-white/50 hover:bg-red-500 hover:text-white transition-colors"><Trash2 className="w-3 h-3" /></button>
+                                                        <button onClick={(e) => handleDeleteRoom(e, r._id)} className="p-1 rounded bg-black/50 text-white/50 hover:bg-red-500 hover:text-white transition-colors"><Trash2 className="w-3 h-3" /></button>
                                                     </div>
-                                                    {editingRoomId === r.id ? (
+                                                    {editingRoomId === r._id ? (
                                                         <form onSubmit={submitEditRoom} onClick={e => e.stopPropagation()} className="space-y-2">
                                                             <input value={editRoomData.id} onChange={e => setEditRoomData({ ...editRoomData, id: e.target.value })} className="w-full bg-black/40 border border-white/20 rounded p-1.5 text-white text-xs" required pattern="\d{3}" />
                                                             <input value={editRoomData.name} onChange={e => setEditRoomData({ ...editRoomData, name: e.target.value })} className="w-full bg-black/40 border border-white/20 rounded p-1.5 text-white text-xs" placeholder="Name" />
@@ -481,10 +517,12 @@ const RoomSelectionView = ({ building, onBack }) => {
                                                                 <option value="Three">Three</option>
                                                             </select>
                                                             <div className="flex gap-2">
-                                                                <input type="number" value={editRoomData.rows} onChange={e => setEditRoomData({ ...editRoomData, rows: Number(e.target.value) })} className="w-full bg-black/40 border border-white/20 rounded p-1.5 text-white text-xs" placeholder="Rows" />
-                                                                <input type="number" value={editRoomData.columns} onChange={e => setEditRoomData({ ...editRoomData, columns: Number(e.target.value) })} className="w-full bg-black/40 border border-white/20 rounded p-1.5 text-white text-xs" placeholder="Cols" />
+                                                                <input type="number" min="1" value={editRoomData.rows} onChange={e => setEditRoomData({ ...editRoomData, rows: Number(e.target.value) })} className="w-full bg-black/40 border border-white/20 rounded p-1.5 text-white text-xs" placeholder="Rows" />
+                                                                <input type="number" min="1" value={editRoomData.columns} onChange={e => setEditRoomData({ ...editRoomData, columns: Number(e.target.value) })} className="w-full bg-black/40 border border-white/20 rounded p-1.5 text-white text-xs" placeholder="Cols" />
                                                             </div>
-                                                            <input type="number" value={editRoomData.capacity} onChange={e => setEditRoomData({ ...editRoomData, capacity: Number(e.target.value) })} className="w-full bg-black/40 border border-white/20 rounded p-1.5 text-white text-xs" placeholder="Capacity" />
+                                                            <div className="text-center text-purple-300 font-mono text-xs py-1">
+                                                                Capacity: {calcCapacity(editRoomData)}
+                                                            </div>
                                                             <div className="flex gap-2 pt-1">
                                                                 <button type="submit" className="flex-1 bg-green-600 hover:bg-green-500 px-2 py-1 rounded text-xs text-white font-medium">Save</button>
                                                                 <button type="button" onClick={(e) => { e.stopPropagation(); setEditingRoomId(null); }} className="flex-1 bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-xs text-white font-medium">Cancel</button>
@@ -499,6 +537,7 @@ const RoomSelectionView = ({ building, onBack }) => {
                                                                 <div className="flex flex-col items-end gap-0.5">
                                                                     <span className="bg-white/5 text-[10px] px-1.5 py-0.5 rounded text-gray-400">{r.capacity} seats</span>
                                                                     <span className="text-[10px] text-purple-400 font-medium">{r.seating_type || "Single"}</span>
+                                                                    <span className="text-[10px] text-gray-500">{r.rows}×{r.columns}</span>
                                                                 </div>
                                                             </div>
                                                             <h4 className="font-medium text-white text-sm">{r.name}</h4>

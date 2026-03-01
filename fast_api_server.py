@@ -18,7 +18,8 @@ from dotenv import load_dotenv
 # --- Internal Imports ---
 from placement_cell_agent.models import InterviewRound, MockTest, Question
 from exam_agent.graph import scheduling_graph
-from exam_agent.models import Building, Room, Department, Student, ExamCycle, Course, Program, Degree, CalendarEvent
+from exam_agent.allocation_graph import allocation_graph
+from exam_agent.models import Building, Room, Department, Student, ExamCycle, Course, Program, Degree, CalendarEvent, TimetableEntry, RoomAllocation
 from db import (
     save_generation_to_db, get_generation_history,
     create_user, get_user_by_email,
@@ -142,6 +143,29 @@ class ExamRequest(BaseModel):
 
 class ExamResponse(BaseModel):
     timetable: List[Dict[str, Any]]
+    conflicts: List[str]
+    status: str
+    errors: List[str]
+
+class ExamSelection(BaseModel):
+    course_code: str
+    date: str
+    session: str
+
+class RoomExamAssignment(BaseModel):
+    room_id: str
+    building_id: str
+    course_codes: List[str]  # which exams this room covers
+
+class AllocationRequest(BaseModel):
+    workspace_id: str
+    exam_cycle_id: str
+    exams: List[ExamSelection]
+    room_assignments: List[RoomExamAssignment]
+    custom_instructions: str = ""
+
+class AllocationResponse(BaseModel):
+    room_allocations: List[Dict[str, Any]]
     conflicts: List[str]
     status: str
     errors: List[str]
@@ -708,6 +732,93 @@ async def schedule_exams(request: ExamRequest, current_user: dict = Depends(get_
         print(f"Error in exam scheduling: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# --- Seat Allocation Endpoint ---
+
+@app.post("/exam/allocate", response_model=AllocationResponse)
+async def allocate_seats(request: AllocationRequest, current_user: dict = Depends(get_current_user)):
+    ws = await get_workspace_by_id(request.workspace_id)
+    if not ws or current_user["_id"] not in ws.get("members", []):
+        raise HTTPException(status_code=403, detail="Access to workspace denied")
+    
+    try:
+        # Fetch exam cycle
+        cycles = await get_all_exam_cycles(request.workspace_id)
+        cycle_dict = next((c for c in cycles if str(c.get("_id", c.get("id"))) == request.exam_cycle_id), None)
+        if not cycle_dict:
+            raise HTTPException(status_code=404, detail="Exam cycle not found")
+        exam_cycle = ExamCycle(**cycle_dict)
+        
+        # Fetch rooms by their IDs
+        all_rooms_data = await get_all_rooms(request.workspace_id)
+        requested_room_ids = {ra.room_id for ra in request.room_assignments}
+        rooms = []
+        for r_data in all_rooms_data:
+            r_copy = dict(r_data)
+            r_copy.pop("_id", None)
+            if r_copy.get("id") in requested_room_ids:
+                rooms.append(Room(**r_copy))
+        
+        if not rooms:
+            raise HTTPException(status_code=400, detail="None of the requested rooms were found.")
+        
+        # Build room-exam map
+        room_exam_map = {}
+        for ra in request.room_assignments:
+            room_exam_map[ra.room_id] = ra.course_codes
+        
+        # Build timetable entries from the exam selections
+        timetable_entries = [
+            TimetableEntry(
+                course_code=ex.course_code,
+                date=ex.date,
+                session=ex.session,
+                start_time="",
+                end_time=""
+            )
+            for ex in request.exams
+        ]
+        
+        # Fetch courses
+        all_courses_data = await get_all_courses(request.workspace_id)
+        selected_codes = {ex.course_code for ex in request.exams}
+        courses = [Course(**c) for c in all_courses_data if c.get("code") in selected_codes]
+        
+        # Fetch students
+        students_data = await get_all_students(request.workspace_id)
+        students = [Student(**s) for s in students_data]
+        
+        initial_state = {
+            "workspace_id": request.workspace_id,
+            "request_data": pydantic_to_dict(request),
+            "students": students,
+            "rooms": rooms,
+            "timetable_entries": timetable_entries,
+            "courses": courses,
+            "room_exam_map": room_exam_map,
+            "room_allocations": [],
+            "conflicts": [],
+            "status": "start",
+            "errors": []
+        }
+        
+        result = await allocation_graph.ainvoke(initial_state)
+        
+        room_allocations = [ra.model_dump() for ra in result.get("room_allocations", [])]
+        
+        return {
+            "room_allocations": room_allocations,
+            "conflicts": result.get("conflicts", []),
+            "status": result.get("status", "unknown"),
+            "errors": result.get("errors", [])
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in seat allocation: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/history", response_model=List[AgentResponse])
 async def get_history(current_user: dict = Depends(get_current_user)):

@@ -1,2 +1,3 @@
 from .graph import scheduling_graph
-from .state import SchedulingState
+from .allocation_graph import allocation_graph
+from .state import SchedulingState, AllocationState

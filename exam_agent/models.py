@@ -118,3 +118,33 @@ class TimetableEntry(BaseModel):
 class ExamPlan(BaseModel):
     timetable: List[TimetableEntry]
     conflicts: List[str] = Field(default_factory=list)
+
+# --- Seat Allocation Models ---
+
+class SeatAllocation(BaseModel):
+    seat_label: str  # e.g. "A1", "B3"
+    bench_index: int  # 0-based bench index in the row
+    seat_position: int  # position within bench (0, 1, or 2)
+    student_id: str  # roll number
+    student_name: str = ""
+    course_code: str
+    program_id: str = ""
+    batch_year: int = 0
+
+class RoomAllocation(BaseModel):
+    room_id: str
+    building_id: str
+    room_name: str = "classroom"
+    rows: int = 10
+    columns: int = 6
+    seating_type: Literal["Three", "Two", "Single"] = "Single"
+    floor_id: int = 1
+    exam_date: str = ""
+    exam_session: str = ""
+    course_codes: List[str] = Field(default_factory=list)
+    course_names: List[str] = Field(default_factory=list)
+    program_ids: List[str] = Field(default_factory=list)
+    batch_years: List[int] = Field(default_factory=list)
+    allocations: List[SeatAllocation] = Field(default_factory=list)
+    total_seats: int = 0
+    occupied_seats: int = 0
