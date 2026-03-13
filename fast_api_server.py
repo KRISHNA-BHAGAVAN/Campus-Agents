@@ -920,7 +920,7 @@ async def create_new_assignment(
         assignment_id = await create_assignment(assignment_data)
         
         # Send emails in background
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8000")
         submission_link = f"{frontend_url}/submit/{assignment_id}"
         
         def send_emails_task():
@@ -1183,10 +1183,27 @@ async def startup_event():
 async def health_check():
     return {"status": "ok"}
 
-# Static Files
+# Static Files + SPA Fallback
 frontend_dist = "dist" if os.path.exists("dist") else "frontend/dist"
 if os.path.exists(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+    # Serve static assets (JS, CSS, images)
+    assets_dir = os.path.join(frontend_dist, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="static_assets")
+    
+    # SPA fallback: serve static files if they exist, else index.html for React Router
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        # Check if the path matches an actual file in dist (e.g. vite.svg, favicon.ico)
+        file_path = os.path.join(frontend_dist, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        # Otherwise serve index.html for React Router
+        index_path = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path, media_type="text/html")
+        raise HTTPException(status_code=404, detail="Frontend not found")
 
 if __name__ == "__main__":
     uvicorn.run("fast_api_server:app", host="0.0.0.0", port=8000, reload=True)
+
