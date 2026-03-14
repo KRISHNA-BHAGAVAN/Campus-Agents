@@ -40,7 +40,7 @@ from db import (
     delete_document, update_document,
     create_assignment, get_all_assignments, get_assignment_by_id, delete_assignment as db_delete_assignment,
     create_submission, get_assignment_submissions, get_submission_by_roll,
-    update_assignment_reminder_sent, get_assignments_needing_reminder,
+    update_assignment_reminder_sent, get_assignments_needing_reminder, get_filtered_students
 )
 # ... imports ...
 
@@ -61,6 +61,20 @@ UPLOADS_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 (UPLOADS_DIR / "student_lists").mkdir(exist_ok=True)
 (UPLOADS_DIR / "submissions").mkdir(exist_ok=True)
+
+class AssignmentStudentParams(BaseModel):
+    roll_number: str
+    name: str = ""
+    email: str
+
+class AssignmentCreateRequest(BaseModel):
+    title: str
+    description: str = ""
+    subject_name: str
+    section: str = ""
+    batch: str = ""
+    deadline: str
+    students: List[AssignmentStudentParams]
 
 app = FastAPI(title="Campus Agent API")
 
@@ -853,68 +867,54 @@ async def get_history(current_user: dict = Depends(get_current_user)):
 
 # --- Assignment Agent Routes ---
 
+@app.get("/workspaces/{workspace_id}/students/filter")
+async def get_students_filtered(
+    workspace_id: str,
+    batch_year: Optional[int] = None,
+    program_id: Optional[str] = None,
+    semester: Optional[int] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get students filtered by batch, program, and semester for assignment creation."""
+    try:
+        students = await get_filtered_students(
+            workspace_id, 
+            batch_year=batch_year, 
+            program_id=program_id, 
+            semester=semester
+        )
+        return students
+    except Exception as e:
+        logger.error(f"Error fetching filtered students: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/workspaces/{workspace_id}/assignments")
 async def create_new_assignment(
     workspace_id: str,
+    request: AssignmentCreateRequest,
     background_tasks: BackgroundTasks,
-    title: str = Form(...),
-    description: str = Form(""),
-    subject_name: str = Form(...),
-    section: str = Form(""),
-    batch: str = Form(""),
-    deadline: str = Form(...),
-    student_list: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """Create an assignment, parse student list, and send notification emails."""
+    """Create an assignment with a specific list of students and send notification emails."""
     try:
-        # Parse student list file (CSV or Excel)
-        contents = await student_list.read()
-        filename = student_list.filename or "students.csv"
-        
-        if filename.endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(contents))
-        else:
-            df = pd.read_excel(io.BytesIO(contents))
-        
-        # Validate required columns
-        required_cols = ["roll_number", "name", "email"]
-        missing = [c for c in required_cols if c not in df.columns]
-        if missing:
-            raise HTTPException(status_code=400, detail=f"Missing required columns: {', '.join(missing)}. Required: roll_number, name, email")
-        
-        # Clean data
-        students_list = []
-        for _, row in df.iterrows():
-            if pd.notna(row.get("roll_number")) and pd.notna(row.get("email")):
-                students_list.append({
-                    "roll_number": str(row["roll_number"]).strip(),
-                    "name": str(row.get("name", "")).strip(),
-                    "email": str(row["email"]).strip()
-                })
+        students_list = [s.model_dump() for s in request.students]
         
         if not students_list:
-            raise HTTPException(status_code=400, detail="No valid students found in the uploaded file.")
-        
-        # Save student list file
-        list_filename = f"{uuid.uuid4()}_{filename}"
-        list_path = UPLOADS_DIR / "student_lists" / list_filename
-        with open(list_path, "wb") as f:
-            f.write(contents)
+            raise HTTPException(status_code=400, detail="No students provided for the assignment.")
         
         # Create assignment document
         assignment_data = {
-            "title": title,
-            "description": description,
-            "subject_name": subject_name,
-            "section": section,
-            "batch": batch,
-            "deadline": deadline,
+            "title": request.title,
+            "description": request.description,
+            "subject_name": request.subject_name,
+            "section": request.section,
+            "batch": request.batch,
+            "deadline": request.deadline,
             "workspace_id": workspace_id,
             "created_by": current_user["_id"],
             "students": students_list,
             "total_students": len(students_list),
-            "student_list_file": list_filename
+            "student_list_file": None  # No longer using file upload
         }
         
         assignment_id = await create_assignment(assignment_data)
@@ -929,9 +929,9 @@ async def create_new_assignment(
                     send_assignment_notification(
                         to_email=student["email"],
                         student_name=student["name"],
-                        assignment_title=title,
-                        deadline=deadline,
-                        subject_name=subject_name,
+                        assignment_title=request.title,
+                        deadline=request.deadline,
+                        subject_name=request.subject_name,
                         submission_link=submission_link
                     )
                 except Exception as e:

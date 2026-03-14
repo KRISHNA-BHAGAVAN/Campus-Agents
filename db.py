@@ -80,6 +80,33 @@ async def get_all_students(workspace_id: str):
         students.append(doc)
     return students
 
+async def get_filtered_students(workspace_id: str, batch_year: Optional[int] = None, program_id: Optional[str] = None, semester: Optional[int] = None):
+    db = get_database()
+    if db is None:
+        raise RuntimeError("Database connection failed")
+    
+    query = {"workspace_id": workspace_id}
+    if batch_year is not None:
+        query["batch_year"] = batch_year
+    if program_id:
+        query["program_id"] = program_id
+    if semester is not None:
+        query["semester"] = semester
+        
+    cursor = db.students.find(query)
+    students = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        # Ensure default values are filled for old mock data
+        if "program_id" not in doc:
+            doc["program_id"] = "Unknown"
+        if "semester" not in doc:
+            doc["semester"] = 1
+        if "batch_year" not in doc:
+            doc["batch_year"] = datetime.now(timezone.utc).year
+        students.append(doc)
+    return students
+
 async def get_all_rooms(workspace_id: str):
     db = get_database()
     if db is None:
