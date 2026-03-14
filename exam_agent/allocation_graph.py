@@ -448,6 +448,7 @@ def modify_allocation_llm_node(state: AllocationState) -> AllocationState:
     - Ensure no student is double-allocated (same student in two places at same time).
     - Maintain the anti-cheating seating pattern where possible.
     - Return the COMPLETE list of room allocations (modified + unmodified).
+    - SEATING EXPLANATION: For a 'Three' seating bench, bench_index 0 has seat_position 0 (Left), 1 (Middle), and 2 (Right). For e.g. row A, these correspond to seat_labels A1, A2, A3 respectively. Ensure your generated seat_label, bench_index, and seat_position fields are mathematically consistent.
     
     Return the complete modified allocation.
     """

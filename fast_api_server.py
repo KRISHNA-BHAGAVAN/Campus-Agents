@@ -180,7 +180,7 @@ class ExamResponse(BaseModel):
 class ExamSelection(BaseModel):
     course_code: str
     date: str
-    session: str
+    session: str = "morning"
 
 class RoomExamAssignment(BaseModel):
     room_id: str
@@ -358,7 +358,7 @@ async def add_building(workspace_id: str, building: Building, current_user: dict
     id = await create_building(building.model_dump())
     return {"id": id}
 
-@app.get("/workspaces/{workspace_id}/rooms", response_model=List[Room])
+@app.get("/workspaces/{workspace_id}/rooms", response_model=List[Dict[str, Any]])
 async def list_rooms(workspace_id: str, current_user: dict = Depends(get_current_user)):
     return await get_all_rooms(workspace_id)
 
@@ -394,7 +394,7 @@ async def add_degree(workspace_id: str, degree: Degree, current_user: dict = Dep
     id = await create_degree(degree.model_dump())
     return {"id": id}
 
-@app.get("/workspaces/{workspace_id}/buildings/{building_id}/rooms", response_model=List[Room])
+@app.get("/workspaces/{workspace_id}/buildings/{building_id}/rooms", response_model=List[Dict[str, Any]])
 async def list_rooms_in_building(workspace_id: str, building_id: str, current_user: dict = Depends(get_current_user)):
     from db import get_rooms_by_building
     return await get_rooms_by_building(workspace_id, building_id)
