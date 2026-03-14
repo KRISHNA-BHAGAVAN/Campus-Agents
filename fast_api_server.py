@@ -567,7 +567,7 @@ async def delete_item(workspace_id: str, resource_type: str, item_id: str, curre
     # Simple mapping for resource_type to collection name
     # "courses" -> "courses", "exams" -> "exams", "buildings" -> "buildings", etc.
     # Validate resource type
-    valid_types = ["courses", "exams", "exam_cycles", "buildings", "rooms", "departments", "students", "programs", "degrees"]
+    valid_types = ["courses", "exams", "exam_cycles", "buildings", "rooms", "departments", "students", "programs", "degrees", "assignments"]
     if resource_type not in valid_types:
         raise HTTPException(status_code=400, detail="Invalid resource type")
         
@@ -580,7 +580,7 @@ async def delete_item(workspace_id: str, resource_type: str, item_id: str, curre
 @app.delete("/workspaces/{workspace_id}/{resource_type}")
 async def delete_item_by_query(workspace_id: str, resource_type: str, id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     # Allow deletion by query parameter `id` when path item_id is not convenient (e.g., empty string ids)
-    valid_types = ["courses", "exams", "exam_cycles", "buildings", "rooms", "departments", "students", "programs", "degrees", "exam_plans"]
+    valid_types = ["courses", "exams", "exam_cycles", "buildings", "rooms", "departments", "students", "programs", "degrees", "exam_plans", "assignments"]
     if resource_type not in valid_types:
         raise HTTPException(status_code=400, detail="Invalid resource type")
 
@@ -599,7 +599,7 @@ async def delete_item_by_query(workspace_id: str, resource_type: str, id: Option
 
 @app.put("/workspaces/{workspace_id}/{resource_type}/{item_id}")
 async def update_item(workspace_id: str, resource_type: str, item_id: str, data: Dict[str, Any], current_user: dict = Depends(get_current_user)):
-    valid_types = ["courses", "exams", "exam_cycles", "buildings", "rooms", "departments", "students", "programs", "degrees"]
+    valid_types = ["courses", "exams", "exam_cycles", "buildings", "rooms", "departments", "students", "programs", "degrees", "assignments"]
     if resource_type not in valid_types:
         raise HTTPException(status_code=400, detail="Invalid resource type")
     
